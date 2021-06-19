@@ -6,7 +6,7 @@ Simple website that scans [Smart Health Cards](https://smarthealth.cards/) QR co
 
 ## Demo
 
-https://smart-health-card-scanner.github.io/
+<a href="https://bramp.github.io/smart-health-card-scanner/">https://bramp.github.io/smart-health-card-scanner/</a>
 
 ## More information
 
@@ -17,7 +17,10 @@ I made this in a few hours one morning, but I'm happy to [receive feedback](http
 ## Developing
 
 ```shell
-yarn build
+# Testing
+$ yarn dev
 
-yarn dev
+# Push
+$ yarn build
+$ yawn deploy
 ```
