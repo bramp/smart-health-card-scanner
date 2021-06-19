@@ -22,5 +22,5 @@ $ yarn dev
 
 # Push
 $ yarn build
-$ yawn deploy
+$ yarn deploy
 ```
