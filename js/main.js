@@ -118,10 +118,9 @@ function parse_code(code) {
 	// 		with Reference.reference populated with short resource-scheme URIs (e.g., {"patient": {"reference": "resource:0"}})
 	let payload;
 
+	// TODO Switch to jws.payloadPP over manual b64 if we can get uncompress working
 	if ('zip' in header) {
 		if (header['zip'] == 'DEF') {
-			// Couldn't figure out how to get a valid UInt8Array out of jws.payloadPP
-			// so extract it again
 			payload = inflate_b64(parts[1]);
 		} else {
 			throw 'Unsupported compression ' + header['zip'];
