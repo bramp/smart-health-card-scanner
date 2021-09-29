@@ -42,9 +42,9 @@ function update_sig_status(text, isError = false) {
 	sigstatus.classList = isError ? "alert alert-error" : "alert alert-info";
 }
 
-function verify_signature(header, raw, xhr) {
+function verify_signature(header, token, xhr) {
 	if (xhr.status != 200) {
-		update_sig_status('<i class="error">pending</i>Unable to retrieve keys: ' + xhr.statusText);
+		update_sig_status('<i class="error">error</i>Unable to retrieve keys: ' + xhr.statusText);
 		return;
 	}
 
@@ -60,7 +60,7 @@ function verify_signature(header, raw, xhr) {
 		update_sig_status("<i class=\"icon\">error</i>Can't find signing key " + header.kid + " in key manifest");
 		return
 	}
-	const verification = KJUR.jws.JWS.verify(raw, key);
+	const verification = KJUR.jws.JWS.verify(token, key);
 	if (verification) {
 		update_sig_status('<strong><i class="icon">verified</i> VALID SIGNATURE</strong> (key id: ' + header.kid + ") from issuer " + header.iss);
 		return;
