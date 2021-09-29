@@ -4,6 +4,7 @@ import base64url from 'base64url';
 import pako from 'pako';
 import { blah } from 'pretty-print-json'; // Wierd bug https://github.com/center-key/pretty-print-json/issues/53
 import QrScanner from 'qr-scanner';
+import { KJUR, KEYUTIL } from 'jsrsasign';
 
 
 const qr = document.getElementById('qr');
@@ -12,7 +13,7 @@ const input = document.getElementById('input');
 const qrScanner = new QrScanner(qr, result => {
 	qrScanner.stop();
 	qr.style.display = "none";
-	
+
 	// Display the QR code
 	input.value = result;
 	input_changed();
@@ -35,6 +36,38 @@ function inflate_b64(base64) {
 	return JSON.parse(decompressed);
 }
 
+function update_sig_status(text, isError = false) {
+	const sigstatus = document.getElementById('sig-status');
+	sigstatus.innerHTML = text;
+	sigstatus.classList = isError ? "alert alert-error" : "alert alert-info";
+}
+
+function verify_signature(header, raw, xhr) {
+	if (xhr.status != 200) {
+		update_sig_status('<i class="error">pending</i>Unable to retrieve keys: ' + xhr.statusText);
+		return;
+	}
+
+	let jwk = xhr.response;
+	let key = null;
+	for (const k of jwk.keys) {
+		if (k.kid == header.kid) {
+			key = KEYUTIL.getKey(k);
+			break;
+		}
+	}
+	if (key === null) {
+		update_sig_status("<i class=\"icon\">error</i>Can't find signing key " + header.kid + " in key manifest");
+		return
+	}
+	const verification = KJUR.jws.JWS.verify(raw, key);
+	if (verification) {
+		update_sig_status('<strong><i class="icon">verified</i> VALID SIGNATURE</strong> (key id: ' + header.kid + ") from issuer " + header.iss);
+		return;
+	}
+	update_sig_status('<strong><i class="icon">error</i> INVALID SIGNATURE</strong> (key id: ' + header.kid + ") from issuer " + header.iss);
+}
+
 // https://spec.smarthealth.cards/#encoding-chunks-as-qr-codes
 function parse_code(code) {
 	console.log("process: ", code);
@@ -53,9 +86,9 @@ function parse_code(code) {
 	let token = '';
 
 	for (let i = 1; i < code.length; i+=2) {
-	    const digit = parseInt(code[i - 1] + code[i]);
+		const digit = parseInt(code[i - 1] + code[i]);
 
-	    token += String.fromCharCode(digit + QR_NUMERIC_OFFSET);
+		token += String.fromCharCode(digit + QR_NUMERIC_OFFSET);
 	}
 
 	const parts = token.split(".");
@@ -64,11 +97,13 @@ function parse_code(code) {
 		throw 'Invalid JWS token expected 3 parts it has ' + parts.length;
 	}
 
+	const jws = KJUR.jws.JWS.parse(token);
+
 	// JWS Header
 	// header includes alg: "ES256"
 	// header includes zip: "DEF"
 	// header includes kid equal to the base64url-encoded SHA-256 JWK Thumbprint of the key (see RFC7638)
-	const header = b64(parts[0]);
+	const header = jws.headerObj;
 
 	// JWS Payload
 	// payload is minified (i.e., all optional whitespace is stripped)
@@ -85,6 +120,8 @@ function parse_code(code) {
 
 	if ('zip' in header) {
 		if (header['zip'] == 'DEF') {
+			// Couldn't figure out how to get a valid UInt8Array out of jws.payloadPP
+			// so extract it again
 			payload = inflate_b64(parts[1]);
 		} else {
 			throw 'Unsupported compression ' + header['zip'];
@@ -93,7 +130,20 @@ function parse_code(code) {
 		payload = b64(parts[1]);
 	}
 
-	let signature = base64url.toBuffer(parts[2]);
+	let signature = jws.sigHex;
+
+	// Add iss to the header so it is passed to the handler
+	header.iss = payload.iss;
+
+	var keysReq = new XMLHttpRequest();
+	keysReq.addEventListener("loadend", function () {
+		verify_signature(header, token, keysReq);
+	});
+	keysReq.responseType = "json";
+	keysReq.open("GET", payload.iss + "/.well-known/jwks.json");
+	update_sig_status('<i class="icon">pending</i>Collecting keys from issuer ' + payload.iss + " ...", true);
+	keysReq.send();
+
 	return {
 		'header': header,
 		'payload': payload,
@@ -119,9 +169,8 @@ function input_changed() {
 		const payload = document.getElementById('payload');
 		payload.innerHTML = prettyPrintJson.toHtml(jws.payload);
 
-		// TODO Encode
-		//const sig = document.getElementById('signature');
-		//sig.innerHTML = prettyPrintJson.toHtml(jws.signature);
+		const sig = document.getElementById('signature');
+		sig.innerHTML = prettyPrintJson.toHtml(jws.signature);
 
 		error.style.display = "none";
 
