@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "base64url": "^3.0.1",
+    "jsrsasign": "^10.4.0",
     "pako": "^2.0.3",
     "pretty-print-json": "^1.0.1",
     "qr-scanner": "^1.2.0"
